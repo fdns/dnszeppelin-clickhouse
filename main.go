@@ -11,7 +11,6 @@ import (
 	"encoding/binary"
 	cdns "github.com/fdns/godnscapture"
 	"github.com/kshvakov/clickhouse"
-	_ "github.com/kshvakov/clickhouse"
 	data "github.com/kshvakov/clickhouse/lib/data"
 	"net"
 	"os"
