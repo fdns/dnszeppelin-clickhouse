@@ -101,12 +101,12 @@ func connectClickhouse(exiting chan bool, clickhouseHost string) (clickhouse.Cli
 		}
 		connection.Commit()
 	}
-	// View to aggregate packet size
+	// View to aggregate the general packet information
 	{
 		stmt, _ := connection.Prepare(`
-		CREATE MATERIALIZED VIEW IF NOT EXISTS DNS_PACKET_SIZE
+		CREATE MATERIALIZED VIEW IF NOT EXISTS DNS_GENERAL_AGGREGATIONS
 		ENGINE=AggregatingMergeTree(DnsDate, (timestamp), 8192) AS
-		SELECT DnsDate, timestamp, sumState(Size) AS TotalSize, avgState(Size) AS AverageSize FROM DNS_LOG GROUP BY DnsDate, timestamp
+		SELECT DnsDate, timestamp, sumState(Size) AS TotalSize, avgState(Size) AS AverageSize, sumState(Edns0Present) as EdnsCount, sumState(DoBit) as DoBitCount FROM DNS_LOG GROUP BY DnsDate, timestamp
 		`)
 
 		if _, err := stmt.Exec([]driver.Value{}); err != nil {
@@ -171,11 +171,12 @@ func connectClickhouse(exiting chan bool, clickhouseHost string) (clickhouse.Cli
 		}
 		connection.Commit()
 	}
+	// View to fetch the queries by IP Prefix
 	{
 		stmt, _ := connection.Prepare(`
-		CREATE MATERIALIZED VIEW IF NOT EXISTS DNS_RESPONCECODE
-		ENGINE=SummingMergeTree(DnsDate, (timestamp, ResponceCode), 8192, c) AS
-		SELECT DnsDate, timestamp, ResponceCode, count(*) as c FROM DNS_LOG GROUP BY DnsDate, timestamp, ResponceCode
+		CREATE MATERIALIZED VIEW IF NOT EXISTS DNS_IP_MASK
+		ENGINE=SummingMergeTree(DnsDate, (timestamp, IPVersion), 8192, c) AS
+		SELECT DnsDate, timestamp, IPVersion, IPPrefix, count(*) as c FROM DNS_LOG GROUP BY DnsDate, timestamp, IPVersion, IPPrefix
 		`)
 
 		if _, err := stmt.Exec([]driver.Value{}); err != nil {
