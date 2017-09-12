@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"runtime/pprof"
 	"sync"
@@ -20,6 +19,7 @@ import (
 var devName = flag.String("devName", "", "Device used to capture")
 var filter = flag.String("filter", "(ip or ip6)", "BPF filter applied to the packet stream. If port is selected, the packets will not be defragged.")
 var port = flag.Uint("port", 53, "Port selected to filter packets")
+var gcTime = flag.Uint("gcTime", 60, "Time in seconds to garbage collect the tcp assembly and ipv4 defragmentation")
 var clickhouseAddress = flag.String("clickhouseAddress", "localhost:9000", "Address of the clickhouse database to save the results")
 var batchSize = flag.Uint("batchSize", 100000, "Minimun capacity of the cache array used to send data to clickhouse. Set close to the queries per second received to prevent allocations")
 var packetHandlerCount = flag.Uint("packetHandlers", 1, "Number of routines used to handle received packets")
@@ -32,6 +32,7 @@ var defraggerChannelSize = flag.Uint("defraggerChannelSize", 500, "Size of the c
 var defraggerChannelReturnSize = flag.Uint("defraggerChannelReturnSize", 500, "Size of the channel where the defragged ipv4 packet are returned")
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
+var loggerFilename = flag.Bool("loggerFilename", false, "Show the file name and number of the logged string")
 
 
 func min(a, b int) int {
@@ -157,6 +158,11 @@ func SendData(connect clickhouse.Clickhouse, batch []cdns.DnsResult) error {
 
 func checkFlags() {
 	flag.Parse()
+	if *loggerFilename {
+		log.SetFlags(log.LstdFlags | log.Lshortfile)
+	} else {
+		log.SetFlags(log.LstdFlags)
+	}
 	if *port > 65535 {
 		log.Fatal("-port must be between 1 and 65535")
 	}
@@ -168,7 +174,6 @@ func checkFlags() {
 
 func main() {
 	checkFlags()
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	if *cpuprofile != "" {
 		f, err := os.Create(*cpuprofile)
 		if err != nil {
@@ -189,7 +194,7 @@ func main() {
 	go func() {
 		time.Sleep(120 * time.Second)
 		if *memprofile != "" {
-			fmt.Println("Writing mem")
+			log.Println("Writing memory profile")
 			f, err := os.Create(*memprofile)
 			if err != nil {
 				log.Fatal("could not create memory profile: ", err)
@@ -207,6 +212,7 @@ func main() {
 		*devName,
 		*filter,
 		uint16(*port),
+		time.Duration(*gcTime) * time.Second,
 		resultChannel,
 		*packetHandlerCount,
 		*packetChannelSize,
@@ -220,6 +226,6 @@ func main() {
 	capturer.Start()
 
 	// Wait for the output to finish
-	fmt.Println("Exiting")
+	log.Println("Exiting")
 	wg.Wait()
 }
