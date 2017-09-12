@@ -64,7 +64,7 @@ func connectClickhouse(exiting chan bool, clickhouseHost string) (clickhouse.Cli
 		stmt, _ := connection.Prepare(`
 		CREATE MATERIALIZED VIEW IF NOT EXISTS DNS_DOMAIN_COUNT
 		ENGINE=SummingMergeTree(DnsDate, (t, Question), 8192, c) AS
-		SELECT DnsDate, toStartOfMinute(timestamp) as t, Question, count(*) as c FROM DNS_LOG GROUP BY DnsDate, t, Question
+		SELECT DnsDate, toStartOfMinute(timestamp) as t, Question, count(*) as c FROM DNS_LOG WHERE QR=0 GROUP BY DnsDate, t, Question
 		`)
 
 		if _, err := stmt.Exec([]driver.Value{}); err != nil {
@@ -78,7 +78,7 @@ func connectClickhouse(exiting chan bool, clickhouseHost string) (clickhouse.Cli
 		stmt, _ := connection.Prepare(`
 		CREATE MATERIALIZED VIEW IF NOT EXISTS DNS_DOMAIN_UNIQUE
 		ENGINE=AggregatingMergeTree(DnsDate, (timestamp), 8192) AS
-		SELECT DnsDate, timestamp, uniqState(Question) AS UniqueDnsCount FROM DNS_LOG GROUP BY DnsDate, timestamp
+		SELECT DnsDate, timestamp, uniqState(Question) AS UniqueDnsCount FROM DNS_LOG WHERE QR=0 GROUP BY DnsDate, timestamp
 		`)
 
 		if _, err := stmt.Exec([]driver.Value{}); err != nil {
@@ -91,8 +91,8 @@ func connectClickhouse(exiting chan bool, clickhouseHost string) (clickhouse.Cli
 	{
 		stmt, _ := connection.Prepare(`
 		CREATE MATERIALIZED VIEW IF NOT EXISTS DNS_PROTOCOL
-		ENGINE=SummingMergeTree(DnsDate, (timestamp, Protocol), 8192, (c, Size)) AS
-		SELECT DnsDate, timestamp, Protocol, count(*) as c FROM DNS_LOG GROUP BY DnsDate, timestamp, Protocol
+		ENGINE=SummingMergeTree(DnsDate, (timestamp, Protocol), 8192, (c)) AS
+		SELECT DnsDate, timestamp, Protocol, count(*) as c FROM DNS_LOG WHERE QR=0 GROUP BY DnsDate, timestamp, Protocol
 		`)
 
 		if _, err := stmt.Exec([]driver.Value{}); err != nil {
@@ -120,7 +120,7 @@ func connectClickhouse(exiting chan bool, clickhouseHost string) (clickhouse.Cli
 		stmt, _ := connection.Prepare(`
 		CREATE MATERIALIZED VIEW IF NOT EXISTS DNS_OPCODE
 		ENGINE=SummingMergeTree(DnsDate, (timestamp, OpCode), 8192, c) AS
-		SELECT DnsDate, timestamp, OpCode, count(*) as c FROM DNS_LOG GROUP BY DnsDate, timestamp, OpCode
+		SELECT DnsDate, timestamp, OpCode, count(*) as c FROM DNS_LOG WHERE QR=0 GROUP BY DnsDate, timestamp, OpCode
 		`)
 
 		if _, err := stmt.Exec([]driver.Value{}); err != nil {
@@ -134,7 +134,7 @@ func connectClickhouse(exiting chan bool, clickhouseHost string) (clickhouse.Cli
 		stmt, _ := connection.Prepare(`
 		CREATE MATERIALIZED VIEW IF NOT EXISTS DNS_TYPE
 		ENGINE=SummingMergeTree(DnsDate, (timestamp, Type), 8192, c) AS
-		SELECT DnsDate, timestamp, Type, count(*) as c FROM DNS_LOG GROUP BY DnsDate, timestamp, Type
+		SELECT DnsDate, timestamp, Type, count(*) as c FROM DNS_LOG WHERE QR=0 GROUP BY DnsDate, timestamp, Type
 		`)
 
 		if _, err := stmt.Exec([]driver.Value{}); err != nil {
@@ -148,7 +148,7 @@ func connectClickhouse(exiting chan bool, clickhouseHost string) (clickhouse.Cli
 		stmt, _ := connection.Prepare(`
 		CREATE MATERIALIZED VIEW IF NOT EXISTS DNS_CLASS
 		ENGINE=SummingMergeTree(DnsDate, (timestamp, Class), 8192, c) AS
-		SELECT DnsDate, timestamp, Class, count(*) as c FROM DNS_LOG GROUP BY DnsDate, timestamp, Class
+		SELECT DnsDate, timestamp, Class, count(*) as c FROM DNS_LOG WHERE QR=0 GROUP BY DnsDate, timestamp, Class
 		`)
 
 		if _, err := stmt.Exec([]driver.Value{}); err != nil {
@@ -162,7 +162,7 @@ func connectClickhouse(exiting chan bool, clickhouseHost string) (clickhouse.Cli
 		stmt, _ := connection.Prepare(`
 		CREATE MATERIALIZED VIEW IF NOT EXISTS DNS_RESPONCECODE
 		ENGINE=SummingMergeTree(DnsDate, (timestamp, ResponceCode), 8192, c) AS
-		SELECT DnsDate, timestamp, ResponceCode, count(*) as c FROM DNS_LOG GROUP BY DnsDate, timestamp, ResponceCode
+		SELECT DnsDate, timestamp, ResponceCode, count(*) as c FROM DNS_LOG WHERE QR=1 GROUP BY DnsDate, timestamp, ResponceCode
 		`)
 
 		if _, err := stmt.Exec([]driver.Value{}); err != nil {
