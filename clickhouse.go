@@ -2,10 +2,10 @@ package main
 
 import (
 	"database/sql/driver"
-	"github.com/kshvakov/clickhouse"
-	"time"
 	"fmt"
+	"github.com/kshvakov/clickhouse"
 	"log"
+	"time"
 )
 
 func connectClickhouseRetry(exiting chan bool, clickhouseHost string) clickhouse.Clickhouse {

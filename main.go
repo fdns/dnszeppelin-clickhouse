@@ -34,7 +34,6 @@ var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
 var loggerFilename = flag.Bool("loggerFilename", false, "Show the file name and number of the logged string")
 
-
 func min(a, b int) int {
 	if a > b {
 		return a
@@ -42,12 +41,12 @@ func min(a, b int) int {
 	return b
 }
 
-func output(resultChannel chan cdns.DnsResult, exiting chan bool, wg *sync.WaitGroup, clickhouseHost string, batchSize uint) {
+func output(resultChannel chan cdns.DNSResult, exiting chan bool, wg *sync.WaitGroup, clickhouseHost string, batchSize uint) {
 	wg.Add(1)
 	defer wg.Done()
 
 	connect := connectClickhouseRetry(exiting, clickhouseHost)
-	batch := make([]cdns.DnsResult, 0, batchSize)
+	batch := make([]cdns.DNSResult, 0, batchSize)
 
 	ticker := time.Tick(time.Second)
 	for {
@@ -59,7 +58,7 @@ func output(resultChannel chan cdns.DnsResult, exiting chan bool, wg *sync.WaitG
 				log.Println(err)
 				connect = connectClickhouseRetry(exiting, clickhouseHost)
 			} else {
-				batch = make([]cdns.DnsResult, 0, batchSize)
+				batch = make([]cdns.DNSResult, 0, batchSize)
 			}
 		case <-exiting:
 			return
@@ -67,7 +66,7 @@ func output(resultChannel chan cdns.DnsResult, exiting chan bool, wg *sync.WaitG
 	}
 }
 
-func SendData(connect clickhouse.Clickhouse, batch []cdns.DnsResult) error {
+func SendData(connect clickhouse.Clickhouse, batch []cdns.DNSResult) error {
 	if len(batch) == 0 {
 		return nil
 	}
@@ -107,7 +106,7 @@ func SendData(connect clickhouse.Clickhouse, batch []cdns.DnsResult) error {
 			defer wg.Done()
 			b.Reserve()
 			for k := start; k < end; k++ {
-				for _, dnsQuery := range batch[k].Dns.Question {
+				for _, dnsQuery := range batch[k].DNS.Question {
 					b.NumRows++
 					b.WriteDate(0, batch[k].Timestamp)
 					b.WriteDateTime(1, batch[k].Timestamp)
@@ -120,19 +119,19 @@ func SendData(connect clickhouse.Clickhouse, batch []cdns.DnsResult) error {
 					b.WriteUInt32(3, binary.BigEndian.Uint32(ip[:4]))
 					b.WriteFixedString(4, []byte(batch[k].Protocol))
 					QR := uint8(0)
-					if batch[k].Dns.Response {
+					if batch[k].DNS.Response {
 						QR = 1
 					}
 
 					b.WriteUInt8(5, QR)
-					b.WriteUInt8(6, uint8(batch[k].Dns.Opcode))
+					b.WriteUInt8(6, uint8(batch[k].DNS.Opcode))
 					b.WriteUInt16(7, uint16(dnsQuery.Qclass))
 					b.WriteUInt16(8, uint16(dnsQuery.Qtype))
-					b.WriteUInt8(9, uint8(batch[k].Dns.Rcode))
+					b.WriteUInt8(9, uint8(batch[k].DNS.Rcode))
 					b.WriteString(10, string(dnsQuery.Name))
 					b.WriteUInt16(11, batch[k].PacketLength)
 					edns, doBit := uint8(0), uint8(0)
-					if edns0 := batch[k].Dns.IsEdns0(); edns0 != nil {
+					if edns0 := batch[k].DNS.IsEdns0(); edns0 != nil {
 						edns = 1
 						if edns0.Do() {
 							doBit = 1
@@ -184,7 +183,7 @@ func main() {
 		}
 		defer pprof.StopCPUProfile()
 	}
-	resultChannel := make(chan cdns.DnsResult, *resultChannelSize)
+	resultChannel := make(chan cdns.DNSResult, *resultChannelSize)
 
 	// Setup output routine
 	exiting := make(chan bool)
@@ -208,7 +207,7 @@ func main() {
 	}()
 
 	// Start listening
-	capturer := cdns.NewDnsCapturer(cdns.CaptureOptions{
+	capturer := cdns.NewDNSCapturer(cdns.CaptureOptions{
 		*devName,
 		*filter,
 		uint16(*port),
