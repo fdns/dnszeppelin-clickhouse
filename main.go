@@ -21,6 +21,7 @@ var filter = flag.String("filter", "(ip or ip6)", "BPF filter applied to the pac
 var port = flag.Uint("port", 53, "Port selected to filter packets")
 var gcTime = flag.Uint("gcTime", 60, "Time in seconds to garbage collect the tcp assembly and ipv4 defragmentation")
 var clickhouseAddress = flag.String("clickhouseAddress", "localhost:9000", "Address of the clickhouse database to save the results")
+var clickhouseDelay = flag.Uint("clickhouseDelay", 1, "Number of seconds to batch the packets")
 var batchSize = flag.Uint("batchSize", 100000, "Minimun capacity of the cache array used to send data to clickhouse. Set close to the queries per second received to prevent allocations")
 var packetHandlerCount = flag.Uint("packetHandlers", 1, "Number of routines used to handle received packets")
 var tcpHandlerCount = flag.Uint("tcpHandlers", 1, "Number of routines used to handle tcp assembly")
@@ -33,6 +34,7 @@ var defraggerChannelReturnSize = flag.Uint("defraggerChannelReturnSize", 500, "S
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
 var loggerFilename = flag.Bool("loggerFilename", false, "Show the file name and number of the logged string")
+var packetLimit = flag.Int("packetLimit", 0, "Limit of packets logged to clickhouse every iteration. Default 0 (disabled)")
 
 func min(a, b int) int {
 	if a > b {
@@ -41,18 +43,20 @@ func min(a, b int) int {
 	return b
 }
 
-func output(resultChannel chan cdns.DNSResult, exiting chan bool, wg *sync.WaitGroup, clickhouseHost string, batchSize uint) {
+func output(resultChannel chan cdns.DNSResult, exiting chan bool, wg *sync.WaitGroup, clickhouseHost string, batchSize, batchDelay uint, limit int) {
 	wg.Add(1)
 	defer wg.Done()
 
 	connect := connectClickhouseRetry(exiting, clickhouseHost)
 	batch := make([]cdns.DNSResult, 0, batchSize)
 
-	ticker := time.Tick(time.Second)
+	ticker := time.Tick(time.Duration(batchDelay) * time.Second)
 	for {
 		select {
 		case data := <-resultChannel:
-			batch = append(batch, data)
+			if limit == 0 || len(batch) < limit {
+				batch = append(batch, data)
+			}
 		case <-ticker:
 			if err := SendData(connect, batch); err != nil {
 				log.Println(err)
@@ -169,6 +173,10 @@ func checkFlags() {
 	if *devName == "" {
 		log.Fatal("-devName is required")
 	}
+
+	if *packetLimit < 0 {
+		log.Fatal("-packetLimit must be equal or greather than 0")
+	}
 }
 
 func main() {
@@ -188,7 +196,7 @@ func main() {
 	// Setup output routine
 	exiting := make(chan bool)
 	var wg sync.WaitGroup
-	go output(resultChannel, exiting, &wg, *clickhouseAddress, *batchSize)
+	go output(resultChannel, exiting, &wg, *clickhouseAddress, *batchSize, *clickhouseDelay, *packetLimit)
 
 	go func() {
 		time.Sleep(120 * time.Second)
