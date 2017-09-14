@@ -17,11 +17,14 @@ import (
 )
 
 var devName = flag.String("devName", "", "Device used to capture")
-var filter = flag.String("filter", "(ip or ip6)", "BPF filter applied to the packet stream. If port is selected, the packets will not be defragged.")
+// Filter is not using "(port 53)", as it will filter out fragmented udp packets, instead, we filter by the ip protocol
+// and check again in the application.
+var filter = flag.String("filter", "((ip and (ip[9] == 6 or ip[9] == 17)) or ip6)", "BPF filter applied to the packet stream. If port is selected, the packets will not be defragged.")
 var port = flag.Uint("port", 53, "Port selected to filter packets")
 var gcTime = flag.Uint("gcTime", 60, "Time in seconds to garbage collect the tcp assembly and ipv4 defragmentation")
 var clickhouseAddress = flag.String("clickhouseAddress", "localhost:9000", "Address of the clickhouse database to save the results")
 var clickhouseDelay = flag.Uint("clickhouseDelay", 1, "Number of seconds to batch the packets")
+var serverName = flag.String("serverName", "default", "Name of the server used to index the metrics.")
 var batchSize = flag.Uint("batchSize", 100000, "Minimun capacity of the cache array used to send data to clickhouse. Set close to the queries per second received to prevent allocations")
 var packetHandlerCount = flag.Uint("packetHandlers", 1, "Number of routines used to handle received packets")
 var tcpHandlerCount = flag.Uint("tcpHandlers", 1, "Number of routines used to handle tcp assembly")
@@ -43,9 +46,10 @@ func min(a, b int) int {
 	return b
 }
 
-func output(resultChannel chan cdns.DNSResult, exiting chan bool, wg *sync.WaitGroup, clickhouseHost string, batchSize, batchDelay uint, limit int) {
+func output(resultChannel chan cdns.DNSResult, exiting chan bool, wg *sync.WaitGroup, clickhouseHost string, batchSize, batchDelay uint, limit int, server string) {
 	wg.Add(1)
 	defer wg.Done()
+	serverByte := []byte(server)
 
 	connect := connectClickhouseRetry(exiting, clickhouseHost)
 	batch := make([]cdns.DNSResult, 0, batchSize)
@@ -58,7 +62,7 @@ func output(resultChannel chan cdns.DNSResult, exiting chan bool, wg *sync.WaitG
 				batch = append(batch, data)
 			}
 		case <-ticker:
-			if err := SendData(connect, batch); err != nil {
+			if err := SendData(connect, batch, serverByte); err != nil {
 				log.Println(err)
 				connect = connectClickhouseRetry(exiting, clickhouseHost)
 			} else {
@@ -70,7 +74,7 @@ func output(resultChannel chan cdns.DNSResult, exiting chan bool, wg *sync.WaitG
 	}
 }
 
-func SendData(connect clickhouse.Clickhouse, batch []cdns.DNSResult) error {
+func SendData(connect clickhouse.Clickhouse, batch []cdns.DNSResult, server []byte) error {
 	if len(batch) == 0 {
 		return nil
 	}
@@ -86,7 +90,7 @@ func SendData(connect clickhouse.Clickhouse, batch []cdns.DNSResult) error {
 		return err
 	}
 
-	_, err = connect.Prepare("INSERT INTO DNS_LOG (DnsDate, timestamp, IPVersion, IPPrefix, Protocol, QR, OpCode, Class, Type, ResponceCode, Question, Size, Edns0Present, DoBit) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+	_, err = connect.Prepare("INSERT INTO DNS_LOG (DnsDate, timestamp, Server, IPVersion, IPPrefix, Protocol, QR, OpCode, Class, Type, ResponceCode, Question, Size, Edns0Present, DoBit) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
 	if err != nil {
 		return err
 	}
@@ -114,26 +118,27 @@ func SendData(connect clickhouse.Clickhouse, batch []cdns.DNSResult) error {
 					b.NumRows++
 					b.WriteDate(0, batch[k].Timestamp)
 					b.WriteDateTime(1, batch[k].Timestamp)
-					b.WriteUInt8(2, batch[k].IPVersion)
+					b.WriteBytes(2, server)
+					b.WriteUInt8(3, batch[k].IPVersion)
 
 					ip := batch[k].DstIP
 					if batch[k].IPVersion == 4 {
 						ip = ip.Mask(net.IPv4Mask(0xff, 0, 0, 0))
 					}
-					b.WriteUInt32(3, binary.BigEndian.Uint32(ip[:4]))
-					b.WriteFixedString(4, []byte(batch[k].Protocol))
+					b.WriteUInt32(4, binary.BigEndian.Uint32(ip[:4]))
+					b.WriteFixedString(5, []byte(batch[k].Protocol))
 					QR := uint8(0)
 					if batch[k].DNS.Response {
 						QR = 1
 					}
 
-					b.WriteUInt8(5, QR)
-					b.WriteUInt8(6, uint8(batch[k].DNS.Opcode))
-					b.WriteUInt16(7, uint16(dnsQuery.Qclass))
-					b.WriteUInt16(8, uint16(dnsQuery.Qtype))
-					b.WriteUInt8(9, uint8(batch[k].DNS.Rcode))
-					b.WriteString(10, string(dnsQuery.Name))
-					b.WriteUInt16(11, batch[k].PacketLength)
+					b.WriteUInt8(6, QR)
+					b.WriteUInt8(7, uint8(batch[k].DNS.Opcode))
+					b.WriteUInt16(8, uint16(dnsQuery.Qclass))
+					b.WriteUInt16(9, uint16(dnsQuery.Qtype))
+					b.WriteUInt8(10, uint8(batch[k].DNS.Rcode))
+					b.WriteString(11, string(dnsQuery.Name))
+					b.WriteUInt16(12, batch[k].PacketLength)
 					edns, doBit := uint8(0), uint8(0)
 					if edns0 := batch[k].DNS.IsEdns0(); edns0 != nil {
 						edns = 1
@@ -141,8 +146,8 @@ func SendData(connect clickhouse.Clickhouse, batch []cdns.DNSResult) error {
 							doBit = 1
 						}
 					}
-					b.WriteUInt8(12, edns)
-					b.WriteUInt8(13, doBit)
+					b.WriteUInt8(13, edns)
+					b.WriteUInt8(14, doBit)
 				}
 			}
 			if err := connect.WriteBlock(b); err != nil {
@@ -196,7 +201,7 @@ func main() {
 	// Setup output routine
 	exiting := make(chan bool)
 	var wg sync.WaitGroup
-	go output(resultChannel, exiting, &wg, *clickhouseAddress, *batchSize, *clickhouseDelay, *packetLimit)
+	go output(resultChannel, exiting, &wg, *clickhouseAddress, *batchSize, *clickhouseDelay, *packetLimit, *serverName)
 
 	go func() {
 		time.Sleep(120 * time.Second)
