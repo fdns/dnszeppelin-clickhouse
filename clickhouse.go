@@ -1,10 +1,14 @@
 package main
 
 import (
-	"database/sql/driver"
+	"encoding/binary"
 	"fmt"
+	cdns "github.com/fdns/godnscapture"
 	"github.com/kshvakov/clickhouse"
+	data "github.com/kshvakov/clickhouse/lib/data"
 	"log"
+	"net"
+	"sync"
 	"time"
 )
 
@@ -34,171 +38,131 @@ func connectClickhouse(exiting chan bool, clickhouseHost string) (clickhouse.Cli
 		log.Println(err)
 		return nil, err
 	}
-	{
-		stmt, _ := connection.Prepare(`
-	CREATE TABLE IF NOT EXISTS DNS_LOG (
-		DnsDate Date,
-		timestamp DateTime,
-		Server String,
-		IPVersion UInt8,
-		IPPrefix UInt32,
-		Protocol FixedString(3),
-		QR UInt8,
-		OpCode UInt8,
-		Class UInt16,
-		Type UInt16,
-		Edns0Present UInt8,
-		DoBit UInt8,
-		ResponceCode UInt8,
-		Question String,
-		Size UInt16
-	) engine=MergeTree(DnsDate, (timestamp, Server), 8192)
-	`)
-		if _, err := stmt.Exec([]driver.Value{}); err != nil {
-			log.Println(err)
-			return nil, err
-		}
-		connection.Commit()
-	}
-	// View to fetch the top queried domains
-	{
-		stmt, _ := connection.Prepare(`
-		CREATE MATERIALIZED VIEW IF NOT EXISTS DNS_DOMAIN_COUNT
-		ENGINE=SummingMergeTree(DnsDate, (t, Server, Question), 8192, c) AS
-		SELECT DnsDate, toStartOfMinute(timestamp) as t, Server, Question, count(*) as c FROM DNS_LOG WHERE QR=0 GROUP BY DnsDate, t, Server, Question
-		`)
 
-		if _, err := stmt.Exec([]driver.Value{}); err != nil {
-			log.Println(err)
-			return nil, err
-		}
-		connection.Commit()
-	}
-	// View to fetch the unique domain count
-	{
-		stmt, _ := connection.Prepare(`
-		CREATE MATERIALIZED VIEW IF NOT EXISTS DNS_DOMAIN_UNIQUE
-		ENGINE=AggregatingMergeTree(DnsDate, (timestamp, Server), 8192) AS
-		SELECT DnsDate, timestamp, Server, uniqState(Question) AS UniqueDnsCount FROM DNS_LOG WHERE QR=0 GROUP BY Server, DnsDate, timestamp
-		`)
+	return connection, err
+}
 
-		if _, err := stmt.Exec([]driver.Value{}); err != nil {
-			log.Println(err)
-			return nil, err
-		}
-		connection.Commit()
+func min(a, b int) int {
+	if a > b {
+		return a
 	}
-	// View to fetch the querys by protocol
-	{
-		stmt, _ := connection.Prepare(`
-		CREATE MATERIALIZED VIEW IF NOT EXISTS DNS_PROTOCOL
-		ENGINE=SummingMergeTree(DnsDate, (timestamp, Server, Protocol), 8192, (c)) AS
-		SELECT DnsDate, timestamp, Server, Protocol, count(*) as c FROM DNS_LOG GROUP BY Server, DnsDate, timestamp, Protocol
-		`)
+	return b
+}
 
-		if _, err := stmt.Exec([]driver.Value{}); err != nil {
-			log.Println(err)
-			return nil, err
-		}
-		connection.Commit()
-	}
-	// View to aggregate the general packet information
-	{
-		stmt, _ := connection.Prepare(`
-		CREATE MATERIALIZED VIEW IF NOT EXISTS DNS_GENERAL_AGGREGATIONS
-		ENGINE=AggregatingMergeTree(DnsDate, (timestamp, Server), 8192) AS
-		SELECT DnsDate, timestamp, Server, sumState(Size) AS TotalSize, avgState(Size) AS AverageSize, sumState(Edns0Present) as EdnsCount, sumState(DoBit) as DoBitCount FROM DNS_LOG GROUP BY Server, DnsDate, timestamp
-		`)
+func output(resultChannel chan cdns.DNSResult, exiting chan bool, wg *sync.WaitGroup, clickhouseHost string, batchSize, batchDelay uint, limit int, server string) {
+	wg.Add(1)
+	defer wg.Done()
+	serverByte := []byte(server)
 
-		if _, err := stmt.Exec([]driver.Value{}); err != nil {
-			log.Println(err)
-			return nil, err
-		}
-		connection.Commit()
-	}
-	// View to aggregate the edns information
-	{
-		stmt, _ := connection.Prepare(`
-		CREATE MATERIALIZED VIEW IF NOT EXISTS DNS_EDNS
-		ENGINE=AggregatingMergeTree(DnsDate, (timestamp, Server), 8192) AS
-		SELECT DnsDate, timestamp, Server, sumState(Edns0Present) as EdnsCount, sumState(DoBit) as DoBitCount FROM DNS_LOG WHERE QR=0 GROUP BY Server, DnsDate, timestamp
-		`)
+	connect := connectClickhouseRetry(exiting, clickhouseHost)
+	batch := make([]cdns.DNSResult, 0, batchSize)
 
-		if _, err := stmt.Exec([]driver.Value{}); err != nil {
-			log.Println(err)
-			return nil, err
+	ticker := time.Tick(time.Duration(batchDelay) * time.Second)
+	for {
+		select {
+		case data := <-resultChannel:
+			if limit == 0 || len(batch) < limit {
+				batch = append(batch, data)
+			}
+		case <-ticker:
+			if err := SendData(connect, batch, serverByte); err != nil {
+				log.Println(err)
+				connect = connectClickhouseRetry(exiting, clickhouseHost)
+			} else {
+				batch = make([]cdns.DNSResult, 0, batchSize)
+			}
+		case <-exiting:
+			return
 		}
-		connection.Commit()
 	}
-	// View to fetch the querys by OpCode
-	{
-		stmt, _ := connection.Prepare(`
-		CREATE MATERIALIZED VIEW IF NOT EXISTS DNS_OPCODE
-		ENGINE=SummingMergeTree(DnsDate, (timestamp, Server, OpCode), 8192, c) AS
-		SELECT DnsDate, timestamp, Server, OpCode, count(*) as c FROM DNS_LOG WHERE QR=0 GROUP BY Server, DnsDate, timestamp, OpCode
-		`)
+}
 
-		if _, err := stmt.Exec([]driver.Value{}); err != nil {
-			log.Println(err)
-			return nil, err
-		}
-		connection.Commit()
+func SendData(connect clickhouse.Clickhouse, batch []cdns.DNSResult, server []byte) error {
+	if len(batch) == 0 {
+		return nil
 	}
-	// View to fetch the querys by Query Type
-	{
-		stmt, _ := connection.Prepare(`
-		CREATE MATERIALIZED VIEW IF NOT EXISTS DNS_TYPE
-		ENGINE=SummingMergeTree(DnsDate, (timestamp, Server, Type), 8192, c) AS
-		SELECT DnsDate, timestamp, Server, Type, count(*) as c FROM DNS_LOG WHERE QR=0 GROUP BY Server, DnsDate, timestamp, Type
-		`)
 
-		if _, err := stmt.Exec([]driver.Value{}); err != nil {
-			log.Println(err)
-			return nil, err
-		}
-		connection.Commit()
+	// Return if the connection is null, we are exiting
+	if connect == nil {
+		return nil
 	}
-	// View to fetch the querys by Query Class
-	{
-		stmt, _ := connection.Prepare(`
-		CREATE MATERIALIZED VIEW IF NOT EXISTS DNS_CLASS
-		ENGINE=SummingMergeTree(DnsDate, (timestamp, Server, Class), 8192, c) AS
-		SELECT DnsDate, timestamp, Server, Class, count(*) as c FROM DNS_LOG WHERE QR=0 GROUP BY Server, DnsDate, timestamp, Class
-		`)
+	log.Println("Sending ", len(batch))
 
-		if _, err := stmt.Exec([]driver.Value{}); err != nil {
-			log.Println(err)
-			return nil, err
-		}
-		connection.Commit()
+	_, err := connect.Begin()
+	if err != nil {
+		return err
 	}
-	// View to fetch the querys by Responce
-	{
-		stmt, _ := connection.Prepare(`
-		CREATE MATERIALIZED VIEW IF NOT EXISTS DNS_RESPONCECODE
-		ENGINE=SummingMergeTree(DnsDate, (timestamp, Server, ResponceCode), 8192, c) AS
-		SELECT DnsDate, timestamp, Server, ResponceCode, count(*) as c FROM DNS_LOG WHERE QR=1 GROUP BY Server, DnsDate, timestamp, ResponceCode
-		`)
 
-		if _, err := stmt.Exec([]driver.Value{}); err != nil {
-			log.Println(err)
-			return nil, err
-		}
-		connection.Commit()
+	_, err = connect.Prepare("INSERT INTO DNS_LOG (DnsDate, timestamp, Server, IPVersion, IPPrefix, Protocol, QR, OpCode, Class, Type, ResponceCode, Question, Size, Edns0Present, DoBit) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+	if err != nil {
+		return err
 	}
-	// View to fetch the queries by IP Prefix
-	{
-		stmt, _ := connection.Prepare(`
-		CREATE MATERIALIZED VIEW IF NOT EXISTS DNS_IP_MASK
-		ENGINE=SummingMergeTree(DnsDate, (timestamp, Server, IPVersion, IPPrefix), 8192, c) AS
-		SELECT DnsDate, timestamp, Server, IPVersion, IPPrefix, count(*) as c FROM DNS_LOG GROUP BY Server, DnsDate, timestamp, IPVersion, IPPrefix
-		`)
 
-		if _, err := stmt.Exec([]driver.Value{}); err != nil {
-			log.Println(err)
-			return nil, err
-		}
-		connection.Commit()
+	block, err := connect.Block()
+	if err != nil {
+		return err
 	}
-	return connection, nil
+
+	blocks := []*data.Block{block}
+
+	count := len(blocks)
+	var wg sync.WaitGroup
+	wg.Add(len(blocks))
+	for i := range blocks {
+		b := blocks[i]
+		start := i * (len(batch)) / count
+		end := min((i+1)*(len(batch))/count, len(batch))
+
+		go func() {
+			defer wg.Done()
+			b.Reserve()
+			for k := start; k < end; k++ {
+				for _, dnsQuery := range batch[k].DNS.Question {
+					b.NumRows++
+					b.WriteDate(0, batch[k].Timestamp)
+					b.WriteDateTime(1, batch[k].Timestamp)
+					b.WriteBytes(2, server)
+					b.WriteUInt8(3, batch[k].IPVersion)
+
+					ip := batch[k].DstIP
+					if batch[k].IPVersion == 4 {
+						ip = ip.Mask(net.IPv4Mask(0xff, 0, 0, 0))
+					}
+					b.WriteUInt32(4, binary.BigEndian.Uint32(ip[:4]))
+					b.WriteFixedString(5, []byte(batch[k].Protocol))
+					QR := uint8(0)
+					if batch[k].DNS.Response {
+						QR = 1
+					}
+
+					b.WriteUInt8(6, QR)
+					b.WriteUInt8(7, uint8(batch[k].DNS.Opcode))
+					b.WriteUInt16(8, uint16(dnsQuery.Qclass))
+					b.WriteUInt16(9, uint16(dnsQuery.Qtype))
+					b.WriteUInt8(10, uint8(batch[k].DNS.Rcode))
+					b.WriteString(11, string(dnsQuery.Name))
+					b.WriteUInt16(12, batch[k].PacketLength)
+					edns, doBit := uint8(0), uint8(0)
+					if edns0 := batch[k].DNS.IsEdns0(); edns0 != nil {
+						edns = 1
+						if edns0.Do() {
+							doBit = 1
+						}
+					}
+					b.WriteUInt8(13, edns)
+					b.WriteUInt8(14, doBit)
+				}
+			}
+			if err := connect.WriteBlock(b); err != nil {
+				return
+			}
+		}()
+	}
+
+	wg.Wait()
+	if err := connect.Commit(); err != nil {
+		return err
+	}
+
+	return nil
 }

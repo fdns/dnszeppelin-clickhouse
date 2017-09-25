@@ -1,11 +1,14 @@
-sudo: required
 language: go
+sudo: required
 services:
-- docker
+  - docker
+go:
+  - 1.8
+  - tip
 before_install:
   - docker-compose up -d
   - sudo apt-get update -qq
   - sudo apt-get install -y libpcap0.8 libpcap0.8-dev libnuma-dev
-go:
-  - 1.8
-  - tip
+script:
+  - cat tables.sql | docker run -i -a stdin --rm --net=host yandex/clickhouse-client
+  - go test .
