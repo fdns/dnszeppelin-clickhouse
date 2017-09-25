@@ -11,5 +11,5 @@ before_install:
   - sudo apt-get update -qq
   - sudo apt-get install -y libpcap0.8 libpcap0.8-dev libnuma-dev
 script:
-  - cat tables.sql | docker run -i -a stdin --rm --net=host yandex/clickhouse-client
+  - cat tables.sql | docker run -i -a stdin --rm --net=host yandex/clickhouse-client --multiline
   - go test .
