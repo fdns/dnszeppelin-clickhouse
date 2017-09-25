@@ -1,14 +1,14 @@
 package main
 
 import (
+	"database/sql"
 	cdns "github.com/fdns/godnscapture"
 	mkdns "github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
-	"testing"
-	"sync"
 	"net"
+	"sync"
+	"testing"
 	"time"
-	"database/sql"
 )
 
 func TestSendData(t *testing.T) {
@@ -19,18 +19,18 @@ func TestSendData(t *testing.T) {
 	defer close(done)
 
 	res := cdns.DNSResult{
-		Timestamp: time.Now(),
-		IPVersion: 4,
-		Protocol: "udp",
-		SrcIP: net.IPv4(127, 0, 0, 1),
-		DstIP: net.IPv4(10, 0, 0, 1),
+		Timestamp:    time.Now(),
+		IPVersion:    4,
+		Protocol:     "udp",
+		SrcIP:        net.IPv4(127, 0, 0, 1),
+		DstIP:        net.IPv4(10, 0, 0, 1),
 		PacketLength: 128,
 	}
 	res.DNS.SetQuestion("example.com.", mkdns.TypeA)
 	resultChannel <- res
 
 	// Wait for the insert
-	time.Sleep(10*time.Second)
+	time.Sleep(10 * time.Second)
 
 	// Check the data was inserted
 	connect, err := sql.Open("clickhouse", "tcp://127.0.0.1:9000?debug=false")
@@ -44,7 +44,7 @@ func TestSendData(t *testing.T) {
 
 	for rows.Next() {
 		var (
-			Server string
+			Server    string
 			IPVersion uint8
 		)
 		if err := rows.Scan(&Server, &IPVersion); err != nil {
