@@ -1,0 +1,7 @@
+# Clickhouse service for testing runtime
+version: '3'
+services:
+  clickhouse:
+    image: yandex/clickhouse-server
+    ports:
+      - 127.0.0.1:9000:9000

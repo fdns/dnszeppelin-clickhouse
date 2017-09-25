@@ -19,7 +19,7 @@ import (
 var devName = flag.String("devName", "", "Device used to capture")
 // Filter is not using "(port 53)", as it will filter out fragmented udp packets, instead, we filter by the ip protocol
 // and check again in the application.
-var filter = flag.String("filter", "((ip and (ip[9] == 6 or ip[9] == 17)) or ip6)", "BPF filter applied to the packet stream. If port is selected, the packets will not be defragged.")
+var filter = flag.String("filter", "((ip and (ip[9] == 6 or ip[9] == 17)) or (ip6 and (ip6[6] == 17 or ip6[6] == 6 or ip6[6] == 44)))", "BPF filter applied to the packet stream. If port is selected, the packets will not be defragged.")
 var port = flag.Uint("port", 53, "Port selected to filter packets")
 var gcTime = flag.Uint("gcTime", 60, "Time in seconds to garbage collect the tcp assembly and ipv4 defragmentation")
 var clickhouseAddress = flag.String("clickhouseAddress", "localhost:9000", "Address of the clickhouse database to save the results")
@@ -32,8 +32,8 @@ var packetChannelSize = flag.Uint("packetHandlerChannelSize", 100000, "Size of t
 var tcpAssemblyChannelSize = flag.Uint("tcpAssemblyChannelSize", 1000, "Size of the tcp assembler")
 var tcpResultChannelSize = flag.Uint("tcpResultChannelSize", 1000, "Size of the tcp result channel")
 var resultChannelSize = flag.Uint("resultChannelSize", 100000, "Size of the result processor channel size")
-var defraggerChannelSize = flag.Uint("defraggerChannelSize", 500, "Size of the channel to send ipv4 packets to be defragged")
-var defraggerChannelReturnSize = flag.Uint("defraggerChannelReturnSize", 500, "Size of the channel where the defragged ipv4 packet are returned")
+var defraggerChannelSize = flag.Uint("defraggerChannelSize", 500, "Size of the channel to send packets to be defragged")
+var defraggerChannelReturnSize = flag.Uint("defraggerChannelReturnSize", 500, "Size of the channel where the defragged packets are returned")
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
 var loggerFilename = flag.Bool("loggerFilename", false, "Show the file name and number of the logged string")
