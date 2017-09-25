@@ -8,8 +8,8 @@ A implementation of the library https://github.com/fdns/godnscapture using Click
 You must import the file tables.sql to your ClickHouse database manually. It will create the DNS_LOG table where the data is inserted, and different views with the aggregated data.
 You can execute this using docker with the following command
 
-```sql
-cat tables.sql | docker run -i -a stdin --rm --net=host yandex/clickhouse-client clickhouse-client --multiquery
+```sh
+cat tables.sql | docker run -i -a stdin --rm --net=host yandex/clickhouse-client --multiquery
 ```
 
 ## Example
