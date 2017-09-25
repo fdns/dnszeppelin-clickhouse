@@ -32,7 +32,7 @@ var resultChannelSize = flag.Uint("resultChannelSize", 100000, "Size of the resu
 var defraggerChannelSize = flag.Uint("defraggerChannelSize", 500, "Size of the channel to send packets to be defragged")
 var defraggerChannelReturnSize = flag.Uint("defraggerChannelReturnSize", 500, "Size of the channel where the defragged packets are returned")
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
-var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
+var memprofile = flag.String("memprofile", "", "write memory profile to file")
 var loggerFilename = flag.Bool("loggerFilename", false, "Show the file name and number of the logged string")
 var packetLimit = flag.Int("packetLimit", 0, "Limit of packets logged to clickhouse every iteration. Default 0 (disabled)")
 
