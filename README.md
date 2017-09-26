@@ -20,6 +20,15 @@ To run the capturer on eth0
 ./gopassivednsclickhouse -serverName localserver -clickhouseAddress localhost:9000 -devName eth0
 ```
 
+## Docker
+You can run an example using docker-compose inside the docker folder. This contain godnscaptureclickhouse, clickhouse and grafana.
+You will need to create the tables manually and upload the file `docker/grafana/panel.json` to grafana manually.
+```sh
+(cd docker && docker-compose up -d)
+# Wait for clickhouse to start
+cat tables.sql | docker run -i -a stdin --rm --net=host yandex/clickhouse-client --multiquery
+```
+
 ## Arguments
 
 |Argument|Description|
