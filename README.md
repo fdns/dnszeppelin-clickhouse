@@ -23,6 +23,8 @@ To run the capturer on eth0
 ## Docker
 You can run an example using docker-compose inside the docker folder. This contain godnscaptureclickhouse, clickhouse and grafana.
 You will need to create the tables manually and upload the file `docker/grafana/panel.json` to grafana when creating a new panel.
+
+lo is the default device listened, and you can change it in `docker/docker-compose.yml`
 ```sh
 (cd docker && docker-compose up -d)
 # Wait for clickhouse to start
