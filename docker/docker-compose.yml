@@ -11,6 +11,13 @@ services:
     build: ./grafana
     ports:
       - 3000:3000
+  godnscaptureclickhouse:
+    build:
+      context: ../
+      dockerfile: docker/godnscaptureclickhouse/Dockerfile
+      args:
+        - dev=lo
+    network_mode: host
 volumes:
   clickhouse_volume:
     driver: local
