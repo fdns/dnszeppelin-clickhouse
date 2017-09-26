@@ -11,4 +11,4 @@ RUN go-wrapper install
 ARG DEV=lo
 ENV DEV=lo
 
-CMD ["sh", "-c", "go-wrapper run -devName=$DEV -clickhouseAddress clickhouse:9000"]
+CMD ["sh", "-c", "go-wrapper run -devName=$DEV -clickhouseAddress localhost:9000"]
