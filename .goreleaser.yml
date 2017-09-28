@@ -1,5 +1,5 @@
 builds:
-  - binary: drum-roll
+  - binary: godnscapture
     goos:
       - linux
     goarch:
