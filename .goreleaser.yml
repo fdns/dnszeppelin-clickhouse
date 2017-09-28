@@ -4,4 +4,7 @@ builds:
       - linux
     goarch:
       - amd64
-      - 386
+archive:
+  format: tar.gz
+  files:
+    - docker/grafana/panel.json
