@@ -20,7 +20,7 @@ services:
       context: ../
       dockerfile: docker/godnscaptureclickhouse/Dockerfile
       args:
-        - dev=lo
+        - DEV=lo
     network_mode: host
 volumes:
   clickhouse_volume:
