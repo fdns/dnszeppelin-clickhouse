@@ -13,3 +13,5 @@ install:
 script:
   - cat tables.sql | docker run -i -a stdin --rm --net=host yandex/clickhouse-client --multiquery
   - go test .
+after_success:
+  - test -n "$TRAVIS_TAG" && curl -sL https://git.io/goreleaser | bash
