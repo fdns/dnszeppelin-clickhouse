@@ -1,7 +1,6 @@
 builds:
   - binary: drum-roll
     goos:
-      - darwin
       - linux
     goarch:
       - amd64
