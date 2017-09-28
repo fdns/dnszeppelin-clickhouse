@@ -1,5 +1,5 @@
 builds:
-  - binary: godnscapture
+  - binary: godnscaptureclickhouse
     goos:
       - linux
     goarch:
