@@ -5,7 +5,7 @@ services:
 go:
   - 1.8
   - tip
-before_install:
+install:
   - (cd test && docker-compose up -d)
   - docker pull yandex/clickhouse-client
   - sudo apt-get update -qq
