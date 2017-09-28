@@ -6,4 +6,4 @@ builds:
       - linux
     goarch:
       - amd64
-      - x86
+      - 386

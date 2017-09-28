@@ -4,7 +4,6 @@ services:
   - docker
 go:
   - 1.8
-  - tip
 install:
   - (cd test && docker-compose up -d)
   - docker pull yandex/clickhouse-client
