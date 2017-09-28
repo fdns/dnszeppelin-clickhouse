@@ -5,7 +5,7 @@
       "label": "clickhouse",
       "description": "",
       "type": "datasource",
-      "pluginId": "vertamedia-clickhouse-datasource",
+      "pluginId": "clickhouse",
       "pluginName": "ClickHouse"
     }
   ],
