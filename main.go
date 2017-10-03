@@ -13,7 +13,7 @@ import (
 )
 
 var devName = flag.String("devName", "", "Device used to capture")
-
+var pcapFile = flag.String("pcapFile", "", "Pcap filename to run")
 // Filter is not using "(port 53)", as it will filter out fragmented udp packets, instead, we filter by the ip protocol
 // and check again in the application.
 var filter = flag.String("filter", "((ip and (ip[9] == 6 or ip[9] == 17)) or (ip6 and (ip6[6] == 17 or ip6[6] == 6 or ip6[6] == 44)))", "BPF filter applied to the packet stream. If port is selected, the packets will not be defragged.")
@@ -47,8 +47,12 @@ func checkFlags() {
 		log.Fatal("-port must be between 1 and 65535")
 	}
 
-	if *devName == "" {
-		log.Fatal("-devName is required")
+	if *devName == "" && *pcapFile == "" {
+		log.Fatal("-devName or -pcapFile is required")
+	}
+
+	if *devName != "" && *pcapFile != "" {
+		log.Fatal("You must set only -devName or -pcapFile, and not both")
 	}
 
 	if *packetLimit < 0 {
@@ -75,25 +79,26 @@ func main() {
 	var wg sync.WaitGroup
 	go output(resultChannel, exiting, &wg, *clickhouseAddress, *batchSize, *clickhouseDelay, *packetLimit, *serverName)
 
-	go func() {
-		time.Sleep(120 * time.Second)
-		if *memprofile != "" {
-			log.Println("Writing memory profile")
-			f, err := os.Create(*memprofile)
-			if err != nil {
-				log.Fatal("could not create memory profile: ", err)
-			}
-			runtime.GC() // get up-to-date statistics
-			if err := pprof.WriteHeapProfile(f); err != nil {
-				log.Fatal("could not write memory profile: ", err)
-			}
-			f.Close()
-		}
-	}()
+	if *memprofile != "" {
+		go func() {
+			time.Sleep(120 * time.Second)
+				log.Println("Writing memory profile")
+				f, err := os.Create(*memprofile)
+				if err != nil {
+					log.Fatal("could not create memory profile: ", err)
+				}
+				runtime.GC() // get up-to-date statistics
+				if err := pprof.WriteHeapProfile(f); err != nil {
+					log.Fatal("could not write memory profile: ", err)
+				}
+				f.Close()
+		}()
+	}
 
 	// Start listening
 	capturer := cdns.NewDNSCapturer(cdns.CaptureOptions{
 		*devName,
+		*pcapFile,
 		*filter,
 		uint16(*port),
 		time.Duration(*gcTime) * time.Second,
