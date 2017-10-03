@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	mkdns "github.com/miekg/dns"
 	"net"
@@ -15,6 +14,7 @@ import (
 
 type CaptureOptions struct {
 	DevName                      string
+	PcapFile                     string
 	Filter                       string
 	Port                         uint16
 	GcTime                       time.Duration
@@ -44,7 +44,7 @@ type DNSResult struct {
 	PacketLength uint16
 }
 
-func initialize(devName, filter string) *pcap.Handle {
+func initializeLivePcap(devName, filter string) *pcap.Handle {
 	// Open device
 	handle, err := pcap.OpenLive(devName, 65536, true, 10*time.Millisecond)
 	if err != nil {
@@ -62,6 +62,22 @@ func initialize(devName, filter string) *pcap.Handle {
 	return handle
 }
 
+func initializeOfflinePcap(fileName, filter string) *pcap.Handle {
+	handle, err := pcap.OpenOffline(fileName)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Set Filter
+	log.Printf("Using File: %s\n", fileName)
+	log.Printf("Filter: %s\n", filter)
+	err = handle.SetBPFFilter(filter)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return handle
+}
+
 func handleInterrupt(done chan bool) {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
@@ -75,14 +91,17 @@ func handleInterrupt(done chan bool) {
 }
 
 func NewDNSCapturer(options CaptureOptions) DNSCapturer {
+	if options.DevName != "" && options.PcapFile != "" {
+		log.Fatal("You cant set DevName and PcapFile.")
+	}
 	var tcpChannels []chan tcpPacket
 
 	tcpReturnChannel := make(chan tcpData, options.TCPResultChannelSize)
 	processingChannel := make(chan gopacket.Packet, options.PacketChannelSize)
-	ip4DefraggerChannel := make(chan layers.IPv4, options.IPDefraggerChannelSize)
+	ip4DefraggerChannel := make(chan ipv4ToDefrag, options.IPDefraggerChannelSize)
 	ip6DefraggerChannel := make(chan ipv6FragmentInfo, options.IPDefraggerChannelSize)
-	ip4DefraggerReturn := make(chan layers.IPv4, options.IPDefraggerReturnChannelSize)
-	ip6DefraggerReturn := make(chan layers.IPv6, options.IPDefraggerReturnChannelSize)
+	ip4DefraggerReturn := make(chan ipv4Defragged, options.IPDefraggerReturnChannelSize)
+	ip6DefraggerReturn := make(chan ipv6Defragged, options.IPDefraggerReturnChannelSize)
 
 	for i := uint(0); i < options.TCPHandlerCount; i++ {
 		tcpChannels = append(tcpChannels, make(chan tcpPacket, options.TCPAssemblyChannelSize))
@@ -112,8 +131,13 @@ func NewDNSCapturer(options CaptureOptions) DNSCapturer {
 }
 
 func (capturer *DNSCapturer) Start() {
+	var handle *pcap.Handle
 	options := capturer.options
-	handle := initialize(options.DevName, options.Filter)
+	if options.DevName != "" {
+		handle = initializeLivePcap(options.DevName, options.Filter)
+	} else {
+		handle = initializeOfflinePcap(options.PcapFile, options.Filter)
+	}
 	defer handle.Close()
 
 	// Setup SIGINT handling
@@ -123,17 +147,20 @@ func (capturer *DNSCapturer) Start() {
 	packetSource.DecodeOptions.Lazy = true
 	packetSource.NoCopy = true
 	log.Println("Waiting for packets")
+
 	for {
 		select {
 		case packet := <-packetSource.Packets():
 			if packet == nil {
-				log.Println("PacketSource returned nil.")
+				log.Println("PacketSource returned nil, exiting (Possible end of pcap file?). Sleeping for 10 seconds waiting for processing to finish")
+				time.Sleep(time.Second * 10)
 				close(options.Done)
 				return
 			}
 			select {
 			case capturer.processing <- packet:
-			default:
+			case <-options.Done:
+				return
 			}
 		case <-options.Done:
 			return

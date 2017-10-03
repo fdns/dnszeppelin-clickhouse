@@ -15,7 +15,7 @@ import (
 type tcpPacket struct {
 	IPVersion uint8
 	tcp       layers.TCP
-	Timestamp time.Time
+	timestamp time.Time
 	flow      gopacket.Flow
 }
 
@@ -24,11 +24,13 @@ type tcpData struct {
 	data      []byte
 	SrcIP     net.IP
 	DstIP     net.IP
+	timestamp time.Time
 }
 
 type dnsStreamFactory struct {
 	tcpReturnChannel chan tcpData
 	IPVersion        uint8
+	currentTimestamp time.Time
 }
 
 type dnsStream struct {
@@ -36,6 +38,7 @@ type dnsStream struct {
 	reader           tcpreader.ReaderStream
 	tcpReturnChannel chan tcpData
 	IPVersion        uint8
+	timestamp        time.Time
 }
 
 func (ds *dnsStream) processStream() {
@@ -62,6 +65,7 @@ func (ds *dnsStream) processStream() {
 						data:      result,
 						SrcIP:     net.IP(ds.Net.Src().Raw()),
 						DstIP:     net.IP(ds.Net.Dst().Raw()),
+						timestamp: ds.timestamp,
 					}
 					// Save the remaining data for future querys
 					data = data[expected:]
@@ -79,6 +83,7 @@ func (stream *dnsStreamFactory) New(net, transport gopacket.Flow) tcpassembly.St
 		reader:           tcpreader.NewReaderStream(),
 		tcpReturnChannel: stream.tcpReturnChannel,
 		IPVersion:        stream.IPVersion,
+		timestamp:        stream.currentTimestamp, // This variable is updated before the assemble call
 	}
 
 	// We must read all the data from the reader or we will have the data standing in memory
@@ -109,10 +114,12 @@ func tcpAssembler(tcpchannel chan tcpPacket, tcpReturnChannel chan tcpData, gcTi
 			{
 				switch packet.IPVersion {
 				case 4:
-					assemblerV4.AssembleWithTimestamp(packet.flow, &packet.tcp, packet.Timestamp)
+					streamFactoryV4.currentTimestamp = packet.timestamp
+					assemblerV4.AssembleWithTimestamp(packet.flow, &packet.tcp, time.Now())
 					break
 				case 6:
-					assemblerV6.AssembleWithTimestamp(packet.flow, &packet.tcp, packet.Timestamp)
+					streamFactoryV6.currentTimestamp = packet.timestamp
+					assemblerV6.AssembleWithTimestamp(packet.flow, &packet.tcp, time.Now())
 					break
 				}
 			}
@@ -120,6 +127,7 @@ func tcpAssembler(tcpchannel chan tcpPacket, tcpReturnChannel chan tcpData, gcTi
 			{
 				// Flush connections that haven't seen activity in the past GcTime.
 				assemblerV4.FlushOlderThan(time.Now().Add(gcTime * -1))
+				assemblerV6.FlushOlderThan(time.Now().Add(gcTime * -1))
 			}
 		case <-done:
 			return
