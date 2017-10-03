@@ -38,6 +38,7 @@ func createCapturer(size uint) (chan DNSResult, DNSCapturer) {
 	done := make(chan bool)
 	capturer := NewDNSCapturer(CaptureOptions{
 		"lo",
+		"",
 		"(ip or ip6)",
 		53,
 		2 * time.Second,
