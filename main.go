@@ -18,7 +18,7 @@ var pcapFile = flag.String("pcapFile", "", "Pcap filename to run")
 // and check again in the application.
 var filter = flag.String("filter", "((ip and (ip[9] == 6 or ip[9] == 17)) or (ip6 and (ip6[6] == 17 or ip6[6] == 6 or ip6[6] == 44)))", "BPF filter applied to the packet stream. If port is selected, the packets will not be defragged.")
 var port = flag.Uint("port", 53, "Port selected to filter packets")
-var gcTime = flag.Uint("gcTime", 60, "Time in seconds to garbage collect the tcp assembly and ipv4 defragmentation")
+var gcTime = flag.Uint("gcTime", 10, "Time in seconds to garbage collect the tcp assembly and ip defragmentation")
 var clickhouseAddress = flag.String("clickhouseAddress", "localhost:9000", "Address of the clickhouse database to save the results")
 var clickhouseDelay = flag.Uint("clickhouseDelay", 1, "Number of seconds to batch the packets")
 var serverName = flag.String("serverName", "default", "Name of the server used to index the metrics.")

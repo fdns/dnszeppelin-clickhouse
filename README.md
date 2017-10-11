@@ -39,7 +39,7 @@ cat tables.sql | docker run -i -a stdin --rm --net=host yandex/clickhouse-client
 |pcapFile|Pcap filename to run|
 |filter|BPF filter applied to the packet stream. Note that if port is selected, the packets will not be defragged.|
 |port|Port selected to filter packets|
-|gcTime|Time in seconds to garbage collect the tcp assembly and ipv4 defragmentation|
+|gcTime|Time in seconds to garbage collect the tcp assembly and ip defragmentation|
 |clickhouseAddress|Address of the clickhouse database to save the results|
 |clickhouseDelay|Number of seconds to batch the packets|
 |serverName|Name of the server used to index the metrics|
