@@ -10,8 +10,8 @@
 [[projects]]
   name = "github.com/fdns/godnscapture"
   packages = [".","ip6defrag"]
-  revision = "bd525b31d8c2c448d9804dd9f41582596f865ed5"
-  version = "v1.0.1"
+  revision = "fd8e155f57a396978092aa3af956a1e3608ee6ef"
+  version = "v1.0.2"
 
 [[projects]]
   name = "github.com/google/gopacket"
@@ -46,6 +46,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "5e510b7449c6fb7784199893622a0aa2ab4a0403c3a8b83ded2a6991c55c8f45"
+  inputs-digest = "c6a49739c4916bbd3e69e2d016eeec4a32ab1e05727f23b4c6da0ac8396adac1"
   solver-name = "gps-cdcl"
   solver-version = 1
