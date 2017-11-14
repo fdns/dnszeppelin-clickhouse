@@ -10,8 +10,8 @@
 [[projects]]
   name = "github.com/google/gopacket"
   packages = [".","ip4defrag","layers","pcap","tcpassembly","tcpassembly/tcpreader"]
-  revision = "7d9ba85c47bb41298fed10f5769f793741de187f"
-  version = "v1.1.13"
+  revision = "11c65f1ca9081dfea43b4f9643f5c155583b73ba"
+  version = "v1.1.14"
 
 [[projects]]
   branch = "master"

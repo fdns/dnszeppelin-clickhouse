@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
-	cdns "github.com/fdns/godnscapture"
+	cdns "github.com/fdns/dnszeppelin"
 	"github.com/kshvakov/clickhouse"
 	data "github.com/kshvakov/clickhouse/lib/data"
 	"log"

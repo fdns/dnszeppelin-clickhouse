@@ -1,4 +1,4 @@
-package godnscapture
+package dnszeppelin
 
 import (
 	"encoding/binary"

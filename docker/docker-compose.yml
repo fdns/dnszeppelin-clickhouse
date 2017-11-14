@@ -18,7 +18,7 @@ services:
   godnscaptureclickhouse:
     build:
       context: ../
-      dockerfile: docker/godnscaptureclickhouse/Dockerfile
+      dockerfile: docker/dnszeppeling-clickhouse/Dockerfile
       args:
         - DEV=lo
     network_mode: host

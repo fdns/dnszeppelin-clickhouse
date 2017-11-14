@@ -1,7 +1,7 @@
-# godnscaptureclickhouse
-[![Build Status](https://travis-ci.org/fdns/godnscaptureclickhouse.svg?branch=master)](https://travis-ci.org/fdns/godnscaptureclickhouse)
+# DnsZeppelin-ClickHouse
+[![Build Status](https://travis-ci.org/fdns/dnszeppelin-clickhouse.svg?branch=master)](https://travis-ci.org/fdns/dnszeppelin-clickhouse)
 
-A implementation of the library https://github.com/fdns/godnscapture using ClickHouse
+A implementation of the library https://github.com/fdns/dnszeppelin using ClickHouse
 
 ## Setting up ClickHouse
 
@@ -17,7 +17,7 @@ cat tables.sql | docker run -i -a stdin --rm --net=host yandex/clickhouse-client
 To run the capturer on eth0
 
 ```sh
-./gopassivednsclickhouse -serverName localserver -clickhouseAddress localhost:9000 -devName eth0
+./dnszeppelin-clickhouse -serverName localserver -clickhouseAddress localhost:9000 -devName eth0
 ```
 
 ## Docker

@@ -1,4 +1,4 @@
-package godnscapture
+package dnszeppelin
 
 import (
 	"log"
@@ -46,7 +46,7 @@ type DNSResult struct {
 
 func initializeLivePcap(devName, filter string) *pcap.Handle {
 	// Open device
-	handle, err := pcap.OpenLive(devName, 65536, true, 10*time.Millisecond)
+	handle, err := pcap.OpenLive(devName, 65536, true, pcap.BlockForever)
 	if err != nil {
 		log.Fatal(err)
 	}
