@@ -15,10 +15,10 @@ services:
     build: ./grafana
     ports:
       - 3000:3000
-  godnscaptureclickhouse:
+  dnszeppelin:
     build:
       context: ../
-      dockerfile: docker/dnszeppeling-clickhouse/Dockerfile
+      dockerfile: docker/dnszeppelin-clickhouse/Dockerfile
       args:
         - DEV=lo
     network_mode: host

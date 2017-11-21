@@ -4,7 +4,7 @@ RUN apt-get update \
   && apt-get install -y wget libfontconfig \
   && rm -rf /var/lib/apt/lists/*
 
-RUN wget -q https://github.com/fdns/grafana/releases/download/v4.5.2-clickhouse/grafana_4.5.2-1506619414_amd64.deb &&\
+RUN wget -q https://github.com/fdns/grafana/releases/download/v4.5.2-clickhouse-2/grafana_4.5.2-1511287227_amd64.deb &&\
     dpkg -i grafana*.deb &&\
     rm grafana*.deb &&\
     mkdir -p /usr/share/grafana
