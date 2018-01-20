@@ -33,7 +33,7 @@ func TestSendData(t *testing.T) {
 	time.Sleep(10 * time.Second)
 
 	// Check the data was inserted
-	connect, err := sql.Open("clickhouse", "tcp://localhost:9000?debug=false")
+	connect, err := sql.Open("clickhouse", "tcp://127.0.0.1:9000?debug=false")
 	if err != nil {
 		t.Fatal(err)
 	}
