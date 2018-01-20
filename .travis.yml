@@ -5,7 +5,7 @@ services:
 go:
   - 1.8
 install:
-  - (cd test && docker-compose up -d)
+  - (cd docker && docker-compose up -d clickhouse)
   - docker pull yandex/clickhouse-client
   - sudo apt-get update -qq
   - sudo apt-get install -y libpcap0.8 libpcap0.8-dev libnuma-dev
